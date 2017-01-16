@@ -39,7 +39,7 @@ if [ "$1" = 'postgres' ]; then
 	# look specifically for PG_VERSION, as it is expected in the DB dir
 	if [ ! -s "$PGDATA/PG_VERSION" ]; then
 		file_env 'POSTGRES_INITDB_ARGS'
-		eval "gosu postgres initdb $POSTGRES_INITDB_ARGS"
+		eval "su-exec postgres initdb $POSTGRES_INITDB_ARGS"
 
 		# check password first so we can output the warning before postgres
 		# messes it up
@@ -67,11 +67,11 @@ if [ "$1" = 'postgres' ]; then
 			authMethod=trust
 		fi
 
-		{ echo; echo "host all all all $authMethod"; } | gosu postgres tee -a "$PGDATA/pg_hba.conf" > /dev/null
+		{ echo; echo "host all all all $authMethod"; } | su-exec postgres tee -a "$PGDATA/pg_hba.conf" > /dev/null
 
 		# internal start of server in order to allow set-up using psql-client		
 		# does not listen on external TCP/IP and waits until start finishes
-		gosu postgres pg_ctl -D "$PGDATA" \
+		su-exec postgres pg_ctl -D "$PGDATA" \
 			-o "-c listen_addresses='localhost'" \
 			-w start
 
@@ -110,14 +110,14 @@ if [ "$1" = 'postgres' ]; then
 			echo
 		done
 
-		gosu postgres pg_ctl -D "$PGDATA" -m fast -w stop
+		su-exec postgres pg_ctl -D "$PGDATA" -m fast -w stop
 
 		echo
 		echo 'PostgreSQL init process complete; ready for start up.'
 		echo
 	fi
 
-	exec gosu postgres "$@"
+	exec su-exec postgres "$@"
 fi
 
 exec "$@"
