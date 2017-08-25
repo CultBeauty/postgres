@@ -1,5 +1,5 @@
 # vim:set ft=dockerfile:
-FROM alpine:3.5
+FROM alpine:3.6
 
 # alpine includes "postgres" user/group in base install
 #   /etc/passwd:22:postgres:x:70:70::/var/lib/postgresql:/bin/sh
@@ -21,9 +21,9 @@ ENV LANG en_US.utf8
 
 RUN mkdir /docker-entrypoint-initdb.d
 
-ENV PG_MAJOR 9.4
-ENV PG_VERSION 9.4.13
-ENV PG_SHA256 0080f55d65194de8b96a2dab153443f8248ff2b2b10e6ab4cda2dcadcac7f2ab
+ENV PG_MAJOR 10
+ENV PG_VERSION 10beta3
+ENV PG_SHA256 6722546739f8e2dd379e8031784e86c5c588638df6c477046ebdd479586bcb3e
 
 RUN set -ex \
 	\
@@ -57,7 +57,7 @@ RUN set -ex \
 #		openldap-dev \
 		openssl-dev \
 # configure: error: prove not found
-		perl \
+		perl-utils \
 # configure: error: Perl module IPC::Run is required to run TAP tests
 		perl-ipc-run \
 #		perl-dev \
