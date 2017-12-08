@@ -2,7 +2,8 @@
 set -eu
 
 declare -A aliases=(
-	[9.6]='9 latest'
+	[10]='latest'
+	[9.6]='9'
 )
 
 self="$(basename "$BASH_SOURCE")"
@@ -85,18 +86,12 @@ for version in "${versions[@]}"; do
 	)
 
 	versionParent="$(awk 'toupper($1) == "FROM" { print $2 }' "$version/Dockerfile")"
-	versionArches=()
-	# http://apt.postgresql.org/pub/repos/apt/dists/jessie-pgdg/main/
-	for arch in amd64 i386 ppc64le; do
-		if [[ " ${parentRepoToArches[$versionParent]} " =~ " $arch " ]]; then
-			versionArches+=( "$arch" )
-		fi
-	done
+	versionArches="${parentRepoToArches[$versionParent]}"
 
 	echo
 	cat <<-EOE
 		Tags: $(join ', ' "${versionAliases[@]}")
-		Architectures: $(join ', ' "${versionArches[@]}")
+		Architectures: $(join ', ' $versionArches)
 		GitCommit: $commit
 		Directory: $version
 	EOE

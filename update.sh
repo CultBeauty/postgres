@@ -10,7 +10,6 @@ fi
 versions=( "${versions[@]%/}" )
 
 declare -A debianSuite=(
-	[9.2]='jessie'
 	[9.3]='jessie'
 	[9.4]='jessie'
 	[9.5]='jessie'
@@ -18,7 +17,6 @@ declare -A debianSuite=(
 	[10]='stretch'
 )
 declare -A alpineVersion=(
-	[9.2]='3.5'
 	[9.3]='3.5'
 	[9.4]='3.5'
 	[9.5]='3.5'
@@ -32,24 +30,34 @@ packagesBase='http://apt.postgresql.org/pub/repos/apt/dists/'
 osspUuidVersion='1.6.2'
 osspUuidHash='11a615225baa5f8bb686824423f50e4427acd3f70d394765bdff32801f0fd5b0'
 
-declare -A suitePackageList
+declare -A suitePackageList=() suiteArches=()
 travisEnv=
 for version in "${versions[@]}"; do
 	suite="${debianSuite[$version]}"
 	if [ -z "${suitePackageList["$suite"]:+isset}" ]; then
 		suitePackageList["$suite"]="$(curl -fsSL "${packagesBase}/${suite}-pgdg/main/binary-amd64/Packages.bz2" | bunzip2)"
 	fi
+	if [ -z "${suiteArches["$suite"]:+isset}" ]; then
+		suiteArches["$suite"]="$(curl -fsSL "${packagesBase}/${suite}-pgdg/Release" | gawk -F ':[[:space:]]+' '$1 == "Architectures" { gsub(/[[:space:]]+/, "|", $2); print $2 }')"
+	fi
 
 	versionList="$(echo "${suitePackageList["$suite"]}"; curl -fsSL "${packagesBase}/${suite}-pgdg/${version}/binary-amd64/Packages.bz2" | bunzip2)"
 	fullVersion="$(echo "$versionList" | awk -F ': ' '$1 == "Package" { pkg = $2 } $1 == "Version" && pkg == "postgresql-'"$version"'" { print $2; exit }' || true)"
+	majorVersion="${version%%.*}"
+
 	(
 		set -x
 		cp docker-entrypoint.sh "$version/"
 		sed -e 's/%%PG_MAJOR%%/'"$version"'/g;' \
 			-e 's/%%PG_VERSION%%/'"$fullVersion"'/g' \
 			-e 's/%%DEBIAN_SUITE%%/'"$suite"'/g' \
+			-e 's/%%ARCH_LIST%%/'"${suiteArches["$suite"]}"'/g' \
 			Dockerfile-debian.template > "$version/Dockerfile"
-		if [ "$version" = '10' ]; then
+		if [ "$majorVersion" = '9' ]; then
+			sed -i -e 's/WALDIR/XLOGDIR/g' \
+				-e 's/waldir/xlogdir/g' \
+				"$version/docker-entrypoint.sh"
+		else
 			# postgresql-contrib-10 package does not exist, but is provided by postgresql-10
 			# Packages.gz:
 			# Package: postgresql-10
@@ -82,10 +90,15 @@ for version in "${versions[@]}"; do
 				# https://pkgs.alpinelinux.org/contents?file=prove&path=&name=&branch=&repo=&arch=x86_64
 				sed -ri 's/(\s+perl)(\s+)/\1-utils\2/' "$version/$variant/Dockerfile"
 			fi
+			if [ "$majorVersion" = '9' ]; then
+				sed -i -e 's/WALDIR/XLOGDIR/g' \
+					-e 's/waldir/xlogdir/g' \
+					"$version/$variant/docker-entrypoint.sh"
+			fi
 
-			# TODO remove all this when 9.2 and 9.3 are EOL (2017-10-01 and 2018-10-01 -- from http://www.postgresql.org/support/versioning/)
+			# TODO remove all this when 9.3 is EOL (2018-10-01 -- from http://www.postgresql.org/support/versioning/)
 			case "$version" in
-				9.2|9.3)
+				9.3)
 					uuidConfigFlag='--with-ossp-uuid'
 					sed -i \
 						-e 's/%%OSSP_UUID_ENV_VARS%%/ENV OSSP_UUID_VERSION '"$osspUuidVersion"'\nENV OSSP_UUID_SHA256 '"$osspUuidHash"'\n/' \
@@ -109,7 +122,8 @@ for version in "${versions[@]}"; do
 		travisEnv="\n  - VERSION=$version VARIANT=$variant$travisEnv"
 	done
 
-	travisEnv='\n  - VERSION='"$version$travisEnv"
+	travisEnv="\n  - VERSION=$version FORCE_DEB_BUILD=1$travisEnv"
+	travisEnv="\n  - VERSION=$version$travisEnv"
 done
 
 travis="$(awk -v 'RS=\n\n' '$1 == "env:" { $0 = "env:'"$travisEnv"'" } { printf "%s%s", $0, RS }' .travis.yml)"
