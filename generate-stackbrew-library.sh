@@ -2,7 +2,7 @@
 set -eu
 
 declare -A aliases=(
-	[10]='latest'
+	[13]='latest'
 	[9.6]='9'
 )
 
@@ -43,7 +43,7 @@ getArches() {
 
 	eval "declare -g -A parentRepoToArches=( $(
 		find -name 'Dockerfile' -exec awk '
-				toupper($1) == "FROM" && $2 !~ /^('"$repo"'|scratch|microsoft\/[^:]+)(:|$)/ {
+				toupper($1) == "FROM" && $2 !~ /^('"$repo"'|scratch|.*\/.*)(:|$)/ {
 					print "'"$officialImagesUrl"'" $2
 				}
 			' '{}' + \
@@ -80,8 +80,14 @@ for version in "${versions[@]}"; do
 		versionAliases+=( $fullVersion )
 		fullVersion="${fullVersion%[.-]*}"
 	done
+	# skip unadorned "version" on prereleases: https://www.postgresql.org/developer/beta/
+	# - https://github.com/docker-library/postgres/issues/662
+	# - https://github.com/docker-library/postgres/issues/784
+	case "$pgdgVersion" in
+		*alpha* | *beta*| *rc*) ;;
+		*) versionAliases+=( $version ) ;;
+	esac
 	versionAliases+=(
-		$version
 		${aliases[$version]:-}
 	)
 
